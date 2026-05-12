@@ -1,34 +1,40 @@
-import React, { useState } from 'react';
-import { View, TextInput, Button, Alert, StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';
-
+import React, { useState } from 'react';
+import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
+// Importamos a função que você acabou de criar no repositório
+import PlayerRepo from '../../repositories/playerRepository';
 export default function TelaCadastro() {
-  // No TypeScript, ele já infere que isso é uma string, mas você pode tipar se quiser:
-  // const [nome, setNome] = useState<string>('');
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
 
   const fazerCadastro = async () => {
+    // Validação básica para não enviar campos vazios
+    if (!nome || !email || !senha) {
+      Alert.alert('Erro', 'Por favor, preencha todos os campos.');
+      return;
+    }
+
     try {
-      // Lembre-se de trocar o X.X pelo IP local da sua máquina (IPv4)
-      const resposta = await fetch('http://localhost:3000/cadastro', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, email, senha })
-      });
+      // ADEUS FETCH! Agora chamamos o banco diretamente:
+      await PlayerRepo.createPlayer(nome, email, senha);
+      Alert.alert('Sucesso', 'Jogador cadastrado no banco local!');
+      
+      // Limpa os campos após o cadastro
+      setNome('');
+      setEmail('');
+      setSenha('');
 
-      const dados = await resposta.json();
-
-      if (!resposta.ok) {
-        Alert.alert('Atenção', dados.erro);
+      // Volta para a tela anterior
+      router.back(); 
+    } catch (error: any) {
+      // Se o email já existir, o SQLite vai lançar um erro (UNIQUE constraint)
+      if (error.message.includes('UNIQUE')) {
+        Alert.alert('Erro', 'Este e-mail já está cadastrado.');
       } else {
-        Alert.alert('Sucesso', 'Jogador cadastrado!');
-        // Volta para a tela de login após cadastrar
-        router.back(); 
+        console.error(error);
+        Alert.alert('Erro', 'Não foi possível salvar o jogador no banco de dados.');
       }
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível conectar ao servidor.');
     }
   };
 
@@ -70,14 +76,14 @@ const styles = StyleSheet.create({
     flex: 1, 
     padding: 20, 
     justifyContent: 'center',
-    backgroundColor: '#fff' // <-- Fundo branco garantido
+    backgroundColor: '#fff'
   },
   titulo: { 
     fontSize: 24, 
     fontWeight: 'bold', 
     marginBottom: 20, 
     textAlign: 'center',
-    color: '#000' // <-- Texto preto garantido
+    color: '#000'
   },
   input: { 
     borderWidth: 1, 
@@ -85,7 +91,7 @@ const styles = StyleSheet.create({
     padding: 10, 
     marginBottom: 15, 
     borderRadius: 5,
-    backgroundColor: '#f9f9f9', // <-- Fundo cinza claro no input
+    backgroundColor: '#f9f9f9',
     color: '#000'
   }
 });

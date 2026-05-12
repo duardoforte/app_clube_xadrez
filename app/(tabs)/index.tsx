@@ -9,40 +9,66 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
+// Importando o repositório que criamos no padrão objeto
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Importe aqui
+import playerRepository from "../../repositories/playerRepository";
 export default function TelaLogin() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
 
-  const fazerLogin = () => {
-    // CREDENCIAL MOCKADA
-    if (email === "admin@chess.com" && senha === "1234") {
-      router.replace("/(tabs)");
-    } else if (email === "" || senha === "") {
+  const fazerLogin = async () => {
+    if (email.trim() === "" || senha.trim() === "") {
       Alert.alert("Erro", "Preencha todos os campos");
-    } else {
-      Alert.alert(
-        "Erro",
-        "Usuário ou senha inválidos (Dica: admin@chess.com / 1234)",
-      );
+      return;
     }
-  };
 
+  try {
+  const jogador = await playerRepository.getPlayerByEmail(email.trim().toLowerCase());
+
+  // 1. Debug: O que veio do banco?
+  console.log("Resultado da busca por email:", jogador);
+
+  if (!jogador) {
+    // Caso o e-mail não exista no banco
+    Alert.alert("Debug: Erro no E-mail", `O e-mail "${email}" não foi encontrado no banco de dados.`);
+    return;
+  }
+
+  // 2. Debug: Se chegou aqui, o jogador existe. Vamos ver a senha.
+  console.log("Senha digitada:", senha);
+  console.log("Senha no banco:", jogador.senha);
+
+  if (jogador.senha === senha) {
+    await AsyncStorage.setItem('userEmail', jogador.email); 
+    Alert.alert("Você logou com sucesso!")
+    router.replace("/(tabs)");
+  } else {
+    // E-mail existe, mas a senha está errada
+    Alert.alert("Debug: Erro na Senha", "O e-mail está correto, mas a senha não confere.");
+  }
+
+} catch (error) {
+  console.error("Erro técnico no login:", error);
+  Alert.alert("Erro", "Falha na conexão com o banco.");
+    }
+
+  }
   return (
     <View style={styles.container}>
       <Text style={styles.titulo}>Clube de Xadrez</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="E-mail (admin@chess.com)"
+        placeholder="Digite seu e-mail"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
+        keyboardType="email-address"
       />
 
       <TextInput
         style={styles.input}
-        placeholder="Senha (1234)"
+        placeholder="Digite sua senha"
         value={senha}
         onChangeText={setSenha}
         secureTextEntry
