@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
 // Importamos a função que você acabou de criar no repositório
-import PlayerRepo from '../../repositories/playerRepository';
+import PlayerRepo from '../repositories/playerRepository';
 export default function TelaCadastro() {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');

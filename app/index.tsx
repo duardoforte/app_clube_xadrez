@@ -11,7 +11,7 @@ import {
 } from "react-native";
 // Importando o repositório que criamos no padrão objeto
 import AsyncStorage from '@react-native-async-storage/async-storage'; // Importe aqui
-import playerRepository from "../../repositories/playerRepository";
+import playerRepository from "../repositories/playerRepository";
 export default function TelaLogin() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -41,7 +41,7 @@ export default function TelaLogin() {
   if (jogador.senha === senha) {
     await AsyncStorage.setItem('userEmail', jogador.email); 
     Alert.alert("Você logou com sucesso!")
-    router.replace("/(tabs)");
+    router.replace("/ranking");
   } else {
     // E-mail existe, mas a senha está errada
     Alert.alert("Debug: Erro na Senha", "O e-mail está correto, mas a senha não confere.");
