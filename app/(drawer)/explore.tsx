@@ -1,148 +1,298 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import playerRepository from "../../repositories/playerRepository";
 
 export default function TelaPerfil() {
-  const [nome, setNome] = useState('');
-  const [email, setEmail] = useState('');
-  const [emailAntigo, setEmailAntigo] = useState('');
-  const [senha, setSenha] = useState('');
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailAntigo, setEmailAntigo] = useState("");
+  const [senhaNova, setSenhaNova] = useState("");
+  const [confirmarSenhaNova, setConfirmarSenhaNova] = useState("");
+  const [rating, setRating] = useState(0);
   const [carregando, setCarregando] = useState(false);
 
-  // 1. Carregar dados iniciais do banco
-  useEffect(() => {
-    const carregarDadosIniciais = async () => {
-      try {
-        const emailSalvo = await AsyncStorage.getItem('userEmail');
-        if (emailSalvo) {
-          // Buscamos sempre em lowercase para evitar erros de case-sensitive
-          const dados = await playerRepository.getPlayerByEmail(emailSalvo.toLowerCase());
-          if (dados) {
-            setNome(dados.nome || '');
-            setEmail(dados.email);
-            setEmailAntigo(dados.email); // CRITICO: Armazena a chave para o WHERE do UPDATE
-          }
+  // 1. Carrega os dados atualizados do SQLite local
+  const carregarDadosIniciais = async () => {
+    try {
+      const emailSalvo = await AsyncStorage.getItem("userEmail");
+      if (emailSalvo) {
+        const dados = await playerRepository.getPlayerByEmail(
+          emailSalvo.toLowerCase(),
+        );
+        if (dados) {
+          setNome(dados.nome || "");
+          setEmail(dados.email);
+          setEmailAntigo(dados.email);
+          setRating(dados.rating ?? 0); // Captura o ELO real do banco
         }
-      } catch (e) {
-        console.error("Erro ao carregar dados", e);
       }
-    };
+    } catch (e) {
+      console.error("Erro ao carregar dados", e);
+    }
+  };
+
+  useEffect(() => {
     carregarDadosIniciais();
   }, []);
 
-  // 2. Salvar Alterações
+  // 2. Lógica profissional de atualização de perfil e senha
   const realizarAtualizacao = async () => {
     const emailNovo = email.trim().toLowerCase();
+    const nomeLimpo = nome.trim();
+    const senhaLimpa = senhaNova.trim();
+    const confirmarLimpa = confirmarSenhaNova.trim();
 
-    if (!nome.trim() || !emailNovo) {
-      Alert.alert('Erro', 'Preencha nome e e-mail.');
+    if (!nomeLimpo || !emailNovo) {
+      Alert.alert(
+        "Campos Obrigatórios",
+        "Nome e E-mail não podem ficar vazios.",
+      );
       return;
+    }
+
+    // Validações de Senha se o usuário digitou algo
+    if (senhaLimpa !== "") {
+      if (senhaLimpa.length < 4) {
+        Alert.alert(
+          "Segurança Fraca",
+          "A nova senha deve ter pelo menos 4 caracteres.",
+        );
+        return;
+      }
+      if (senhaLimpa !== confirmarLimpa) {
+        Alert.alert(
+          "Senhas Divergentes",
+          "A confirmação não coincide com a nova senha digitada.",
+        );
+        return;
+      }
     }
 
     setCarregando(true);
     try {
-      // 1. Busca os dados atuais para não perder a senha se o campo estiver vazio
       const dadosAtuais = await playerRepository.getPlayerByEmail(emailAntigo);
-      
+
       if (!dadosAtuais) {
-        Alert.alert('Erro', 'Usuário não encontrado no banco.');
+        Alert.alert("Erro", "Usuário não localizado no banco.");
         return;
       }
 
-      const senhaFinal = senha.trim() === "" ? dadosAtuais.senha : senha;
+      // Se o campo de senha nova estiver em branco, mantém a senha atual do banco
+      const senhaFinal = senhaLimpa === "" ? dadosAtuais.senha : senhaLimpa;
 
-      // 2. Executa o Update usando o emailAntigo como referência no WHERE
       const sucesso = await playerRepository.updatePlayer(
-        nome,
+        nomeLimpo,
         emailNovo,
-        senhaFinal, 
-        emailAntigo
+        senhaFinal,
+        emailAntigo,
       );
 
       if (sucesso) {
-        // 3. Atualiza o AsyncStorage se o e-mail mudou
         if (emailNovo !== emailAntigo) {
-          await AsyncStorage.setItem('userEmail', emailNovo);
-          setEmailAntigo(emailNovo); // Atualiza a referência para a próxima edição
+          await AsyncStorage.setItem("userEmail", emailNovo);
+          setEmailAntigo(emailNovo);
         }
-        console.log("Nova senha:", senhaFinal)
-        Alert.alert('Sucesso', 'Perfil atualizado com sucesso!');
-        setSenha(''); // Limpa o campo de senha por segurança
+        Alert.alert(
+          "Perfil Atualizado ♔",
+          "Suas alterações foram salvas com sucesso.",
+        );
+        setSenhaNova("");
+        setConfirmarSenhaNova("");
+        carregarDadosIniciais(); // Recarrega os dados para garantir sincronia
       } else {
-        Alert.alert('Erro', 'Nenhuma alteração foi feita no banco.');
+        Alert.alert("Informação", "Nenhuma modificação foi detectada.");
       }
     } catch (error) {
       console.error("Erro na atualização:", error);
-      Alert.alert('Erro', 'Falha ao acessar o banco de dados.');
+      Alert.alert(
+        "Erro Técnico",
+        "Não foi possível atualizar os dados no SQLite.",
+      );
     } finally {
       setCarregando(false);
     }
   };
 
   const sair = async () => {
-    await AsyncStorage.removeItem('userEmail');
-    router.replace('/');
+    await AsyncStorage.removeItem("userEmail");
+    router.replace("/");
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.titulo}>Menu do Jogador</Text>
-
-      <View style={styles.secao}>
-        <Text style={styles.subtitulo}>Meus Dados</Text>
-        
-        <Text style={styles.label}>Nome:</Text>
-        <TextInput 
-          style={styles.input} 
-          value={nome} 
-          onChangeText={setNome} 
-          placeholder="Seu nome" 
-        />
-        
-        <Text style={styles.label}>E-mail:</Text>
-        <TextInput 
-          style={styles.input} 
-          value={email} 
-          onChangeText={setEmail} 
-          placeholder="E-mail" 
-          keyboardType="email-address" 
-          autoCapitalize="none" 
-        />
-        
-        <Text style={styles.label}>Nova Senha (deixe em branco para manter a atual):</Text>
-        <TextInput 
-          style={styles.input} 
-          value={senha} 
-          onChangeText={setSenha} 
-          placeholder="Digite a nova senha" 
-          secureTextEntry 
-        />
-
-        {carregando ? (
-          <ActivityIndicator size="small" color="#2ecc71" style={{ marginVertical: 10 }} />
-        ) : (
-          <Button 
-            title="Salvar Todas as Alterações" 
-            onPress={realizarAtualizacao} 
-            color="#2ecc71" 
-          />
-        )}
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header do Perfil com Visual Premium */}
+      <View style={styles.headerPerfil}>
+        <View style={styles.avatarCirculo}>
+          <Text style={styles.avatarIcone}>♚</Text>
+        </View>
+        <Text style={styles.perfilNome}>{nome || "Carregando..."}</Text>
+        <View style={styles.badgeElo}>
+          <Text style={styles.badgeEloTexto}>⚡ {rating} ELO</Text>
+        </View>
       </View>
 
-      <View style={[styles.secao, {marginTop: 10}]}>
-        <Button title="Sair da Conta" onPress={sair} color="#e74c3c" />
+      {/* Card 1: Dados Cadastrais */}
+      <View style={styles.card}>
+        <Text style={styles.cardSubtitulo}>Dados Pessoais</Text>
+
+        <Text style={styles.label}>Nome de Exibição</Text>
+        <TextInput
+          style={styles.input}
+          value={nome}
+          onChangeText={setNome}
+          placeholder="Seu nome no clube"
+          placeholderTextColor="#999"
+        />
+
+        <Text style={styles.label}>Endereço de E-mail</Text>
+        <TextInput
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          placeholder="seu-email@chess.com"
+          placeholderTextColor="#999"
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+      </View>
+
+      {/* Card 2: Segurança / Alteração de Senha */}
+      <View style={styles.card}>
+        <Text style={styles.cardSubtitulo}>Segurança da Conta</Text>
+        <Text style={styles.infoDica}>
+          Deixe os campos abaixo em branco caso não queira alterar sua senha
+          atual.
+        </Text>
+
+        <Text style={styles.label}>Nova Senha</Text>
+        <TextInput
+          style={styles.input}
+          value={senhaNova}
+          onChangeText={setSenhaNova}
+          placeholder="No mínimo 4 caracteres"
+          placeholderTextColor="#999"
+          secureTextEntry
+        />
+
+        <Text style={styles.label}>Confirmar Nova Senha</Text>
+        <TextInput
+          style={styles.input}
+          value={confirmarSenhaNova}
+          onChangeText={setConfirmarSenhaNova}
+          placeholder="Repita a nova senha"
+          placeholderTextColor="#999"
+          secureTextEntry
+        />
+      </View>
+
+      {/* Botões de Ação Customizados */}
+      <View style={styles.containerBotoes}>
+        <TouchableOpacity
+          style={styles.botaoSalvar}
+          onPress={realizarAtualizacao}
+          disabled={carregando}
+        >
+          {carregando ? (
+            <ActivityIndicator color="#FFF" size="small" />
+          ) : (
+            <Text style={styles.botaoSalvarTexto}>Salvar Modificações</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.botaoSair} onPress={sair}>
+          <Text style={styles.botaoSairTexto}>Encerrar Sessão</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 20 },
-  titulo: { fontSize: 24, fontWeight: 'bold', marginTop: 40, marginBottom: 30, textAlign: 'center' },
-  secao: { marginBottom: 30, padding: 15, backgroundColor: '#f9f9f9', borderRadius: 10 },
-  subtitulo: { fontSize: 18, fontWeight: '600', marginBottom: 15 },
-  input: { borderWidth: 1, borderColor: '#ddd', padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: '#fff' },
-  label: { fontSize: 14, color: '#666', marginBottom: 5, fontWeight: '500' },
+  container: { flex: 1, backgroundColor: "#FFFFFF", paddingHorizontal: 20 },
+  headerPerfil: { alignItems: "center", marginTop: 40, marginBottom: 30 },
+  avatarCirculo: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#1A1A1A",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  avatarIcone: { fontSize: 40, color: "#FFFFFF" },
+  perfilNome: { fontSize: 22, fontWeight: "800", color: "#1A1A1A" },
+  badgeElo: {
+    backgroundColor: "#F1F3F5",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  badgeEloTexto: { fontSize: 13, fontWeight: "700", color: "#4A5568" },
+  card: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E1E1E1",
+  },
+  cardSubtitulo: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 15,
+  },
+  infoDica: {
+    fontSize: 12,
+    color: "#718096",
+    marginBottom: 15,
+    lineHeight: 16,
+  },
+  label: { fontSize: 13, color: "#4A5568", marginBottom: 6, fontWeight: "600" },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E1E1E1",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    color: "#1A1A1A",
+    fontSize: 15,
+    marginBottom: 12,
+  },
+  containerBotoes: { marginBottom: 40 },
+  botaoSalvar: {
+    backgroundColor: "#1A1A1A",
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  botaoSalvarTexto: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
+  botaoSair: {
+    borderWidth: 1,
+    borderColor: "#E1E1E1",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  botaoSairTexto: { color: "#E74C3C", fontSize: 16, fontWeight: "600" },
 });

@@ -1,114 +1,160 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from "expo-router";
-import React, { useState } from "react";
-import {
-  Alert,
-  Button,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-// Importando o repositório que criamos no padrão objeto
-import AsyncStorage from '@react-native-async-storage/async-storage'; // Importe aqui
+import React, { useState, useEffect } from "react";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Image } from "react-native";
 import playerRepository from "../repositories/playerRepository";
+
+const logoUepa = require('../assets/images/uepa.png');
+
 export default function TelaLogin() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [exibirSenha, setExibirSenha] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => {
+    async function verificarSessao() {
+      const emailSalvo = await AsyncStorage.getItem('userEmail');
+      if (emailSalvo) {
+        router.replace("/ranking");
+      }
+    }
+    verificarSessao();
+  }, []);
 
   const fazerLogin = async () => {
-    if (email.trim() === "" || senha.trim() === "") {
-      Alert.alert("Erro", "Preencha todos os campos");
+    const emailLimpo = email.trim().toLowerCase();
+    const senhaLimpa = senha.trim();
+
+    if (!emailLimpo || !senhaLimpa) {
+      Alert.alert("Campos Vazios", "Por favor, preencha todos os campos para entrar.");
       return;
     }
 
-  try {
-  const jogador = await playerRepository.getPlayerByEmail(email.trim().toLowerCase());
+    setCarregando(true);
+    try {
+      const jogador = await playerRepository.getPlayerByEmail(emailLimpo);
 
-  // 1. Debug: O que veio do banco?
-  console.log("Resultado da busca por email:", jogador);
+      if (!jogador) {
+        Alert.alert("Conta não encontrada", "O e-mail digitado não está registrado no clube.");
+        return;
+      }
 
-  if (!jogador) {
-    // Caso o e-mail não exista no banco
-    Alert.alert("Debug: Erro no E-mail", `O e-mail "${email}" não foi encontrado no banco de dados.`);
-    return;
-  }
-
-  // 2. Debug: Se chegou aqui, o jogador existe. Vamos ver a senha.
-  console.log("Senha digitada:", senha);
-  console.log("Senha no banco:", jogador.senha);
-
-  if (jogador.senha === senha) {
-    await AsyncStorage.setItem('userEmail', jogador.email); 
-    Alert.alert("Você logou com sucesso!")
-    router.replace("/ranking");
-  } else {
-    // E-mail existe, mas a senha está errada
-    Alert.alert("Debug: Erro na Senha", "O e-mail está correto, mas a senha não confere.");
-  }
-
-} catch (error) {
-  console.error("Erro técnico no login:", error);
-  Alert.alert("Erro", "Falha na conexão com o banco.");
+      if (jogador.senha === senhaLimpa) {
+        await AsyncStorage.setItem('userEmail', jogador.email); 
+        router.replace("/ranking");
+      } else {
+        Alert.alert("Senha Incorreta", "A senha digitada está incorreta. Tente novamente.");
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Erro", "Falha ao conectar com o banco de dados.");
+    } finally {
+      setCarregando(false);
     }
+  };
 
-  }
   return (
     <View style={styles.container}>
-      <Text style={styles.titulo}>Clube de Xadrez</Text>
+      <View style={styles.headerContainer}>
+        <Image 
+          source={logoUepa} 
+          style={styles.logoUepa} 
+          resizeMode="contain" 
+        />
+        <Text style={styles.titulo}>Gambito UEPA</Text>
+        <Text style={styles.subtitulo}>Universidade do Estado do Pará</Text>
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Digite seu e-mail"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
+      <View style={styles.form}>
+        <Text style={styles.label}>E-mail de Membro</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="exemplo@uepa.br"
+          placeholderTextColor="#999"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Digite sua senha"
-        value={senha}
-        onChangeText={setSenha}
-        secureTextEntry
-      />
+        <Text style={styles.label}>Senha</Text>
+        <View style={{ position: 'relative' }}>
+          <TextInput
+            style={styles.input}
+            placeholder="Digite sua senha"
+            placeholderTextColor="#999"
+            value={senha}
+            onChangeText={setSenha}
+            secureTextEntry={!exibirSenha}
+          />
+          <TouchableOpacity 
+            style={styles.olhoBotao} 
+            onPress={() => setExibirSenha(!exibirSenha)}
+          >
+            <Text style={styles.olhoTexto}>{exibirSenha ? "Ocultar" : "Mostrar"}</Text>
+          </TouchableOpacity>
+        </View>
 
-      <Button title="Entrar" onPress={fazerLogin} color="#000" />
+        <TouchableOpacity 
+          style={styles.botaoPrincipal} 
+          onPress={fazerLogin}
+          disabled={carregando}
+        >
+          {carregando ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.botaoPrincipalTexto}>Entrar no Clube</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
-      <TouchableOpacity
-        onPress={() => router.push("/cadastro")}
-        style={styles.link}
-      >
-        <Text style={styles.linkTexto}>Não tem conta? Cadastre-se aqui</Text>
+      <TouchableOpacity onPress={() => router.push("/cadastro")} style={styles.link}>
+        <Text style={styles.linkTexto}>Ainda não é membro? <Text style={styles.linkDestaque}>Cadastre-se</Text></Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    justifyContent: "center",
-    backgroundColor: "#fff",
+  container: { flex: 1, padding: 24, justifyContent: "center", backgroundColor: "#FFFFFF" },
+  headerContainer: { alignItems: "center", marginBottom: 40 },
+  logoUepa: { 
+    width: 120, 
+    height: 60, 
+    marginBottom: 20 
   },
-  titulo: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 30,
-    textAlign: "center",
-    color: "#000",
+  titulo: { fontSize: 32, fontWeight: "800", color: "#1A1A1A", letterSpacing: -0.5 },
+  subtitulo: { fontSize: 14, color: "#666", marginTop: 5, textAlign: "center" },
+  form: { marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: "600", color: "#1A1A1A", marginBottom: 8, marginTop: 10 },
+  input: { 
+    borderWidth: 1, 
+    borderColor: "#E1E1E1", 
+    paddingHorizontal: 16, 
+    paddingVertical: 14, 
+    borderRadius: 8, 
+    backgroundColor: "#F8F9FA", 
+    color: "#1A1A1A",
+    fontSize: 15,
+    marginBottom: 10
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 10,
-    marginBottom: 15,
-    borderRadius: 5,
-    backgroundColor: "#f9f9f9",
-    color: "#000",
+  olhoBotao: { position: 'absolute', right: 16, top: 14 },
+  olhoTexto: { color: "#666", fontSize: 13, fontWeight: "500" },
+  botaoPrincipal: { 
+    backgroundColor: "#1A1A1A", 
+    paddingVertical: 16, 
+    borderRadius: 8, 
+    alignItems: "center", 
+    marginTop: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
   },
-  link: { marginTop: 20, alignItems: "center" },
-  linkTexto: { color: "blue", textDecorationLine: "underline" },
+  botaoPrincipalTexto: { color: "#FFF", fontSize: 16, fontWeight: "600" },
+  link: { marginTop: 15, alignItems: "center" },
+  linkTexto: { color: "#666", fontSize: 14 },
+  linkDestaque: { color: "#1A1A1A", fontWeight: "700", textDecorationLine: "underline" }
 });
